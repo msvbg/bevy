@@ -123,6 +123,11 @@ pub struct ImageBundle {
 
 /// A UI node that is a texture atlas sprite
 ///
+/// # Extra behaviours
+///
+/// You may add the following components to enable additional behaviours
+/// - [`ImageScaleMode`](bevy_sprite::ImageScaleMode) to enable either slicing or tiling of the texture
+///
 /// This bundle is identical to [`ImageBundle`] with an additional [`TextureAtlas`] component.
 #[derive(Bundle, Debug, Default)]
 pub struct AtlasImageBundle {
@@ -296,6 +301,7 @@ where
 ///
 /// You may add the following components to enable additional behaviours
 /// - [`ImageScaleMode`](bevy_sprite::ImageScaleMode) to enable either slicing or tiling of the texture
+/// - [`TextureAtlas`] to draw specific section of the texture
 #[derive(Bundle, Clone, Debug)]
 pub struct ButtonBundle {
     /// Describes the logical size of the node
