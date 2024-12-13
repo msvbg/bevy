@@ -24,7 +24,7 @@ use bevy_ecs::{
     reflect::ReflectComponent,
     system::{Commands, Query, Res, ResMut, Resource},
 };
-use bevy_math::{vec2, Dir3, Mat4, Ray3d, Rect, URect, UVec2, UVec4, Vec2, Vec3};
+use bevy_math::{vec2, Dir3, FloatOrd, Mat4, Ray3d, Rect, URect, UVec2, UVec4, Vec2, Vec3};
 use bevy_reflect::prelude::*;
 use bevy_render_macros::ExtractComponent;
 use bevy_transform::components::GlobalTransform;
@@ -535,15 +535,27 @@ pub enum RenderTarget {
     /// Window to which the camera's view is rendered.
     Window(WindowRef),
     /// Image to which the camera's view is rendered.
-    Image(Handle<Image>),
+    Image(ImageRenderTarget),
     /// Texture View to which the camera's view is rendered.
     /// Useful when the texture view needs to be created outside of Bevy, for example OpenXR.
     TextureView(ManualTextureViewHandle),
 }
 
+#[derive(Debug, Clone, Reflect, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ImageRenderTarget {
+    /// The image to render to.
+    pub image: Handle<Image>,
+    /// The scale factor of the render target image, corresponding to the scale
+    /// factor for a window target. This should almost always be 1.0.
+    pub scale_factor: FloatOrd,
+}
+
 impl From<Handle<Image>> for RenderTarget {
     fn from(handle: Handle<Image>) -> Self {
-        Self::Image(handle)
+        Self::Image(ImageRenderTarget {
+            image: handle,
+            scale_factor: FloatOrd(1.0),
+        })
     }
 }
 
@@ -555,7 +567,7 @@ pub enum NormalizedRenderTarget {
     /// Window to which the camera's view is rendered.
     Window(NormalizedWindowRef),
     /// Image to which the camera's view is rendered.
-    Image(Handle<Image>),
+    Image(ImageRenderTarget),
     /// Texture View to which the camera's view is rendered.
     /// Useful when the texture view needs to be created outside of Bevy, for example OpenXR.
     TextureView(ManualTextureViewHandle),
@@ -582,8 +594,8 @@ impl RenderTarget {
     /// Get a handle to the render target's image,
     /// or `None` if the render target is another variant.
     pub fn as_image(&self) -> Option<&Handle<Image>> {
-        if let Self::Image(handle) = self {
-            Some(handle)
+        if let Self::Image(image_target) = self {
+            Some(&image_target.image)
         } else {
             None
         }
@@ -601,9 +613,9 @@ impl NormalizedRenderTarget {
             NormalizedRenderTarget::Window(window_ref) => windows
                 .get(&window_ref.entity())
                 .and_then(|window| window.swap_chain_texture_view.as_ref()),
-            NormalizedRenderTarget::Image(image_handle) => {
-                images.get(image_handle).map(|image| &image.texture_view)
-            }
+            NormalizedRenderTarget::Image(image_target) => images
+                .get(&image_target.image)
+                .map(|image| &image.texture_view),
             NormalizedRenderTarget::TextureView(id) => {
                 manual_texture_views.get(id).map(|tex| &tex.texture_view)
             }
@@ -621,9 +633,9 @@ impl NormalizedRenderTarget {
             NormalizedRenderTarget::Window(window_ref) => windows
                 .get(&window_ref.entity())
                 .and_then(|window| window.swap_chain_texture_format),
-            NormalizedRenderTarget::Image(image_handle) => {
-                images.get(image_handle).map(|image| image.texture_format)
-            }
+            NormalizedRenderTarget::Image(image_target) => images
+                .get(&image_target.image)
+                .map(|image| image.texture_format),
             NormalizedRenderTarget::TextureView(id) => {
                 manual_texture_views.get(id).map(|tex| tex.format)
             }
@@ -644,11 +656,11 @@ impl NormalizedRenderTarget {
                     physical_size: window.physical_size(),
                     scale_factor: window.resolution.scale_factor(),
                 }),
-            NormalizedRenderTarget::Image(image_handle) => {
-                let image = images.get(image_handle)?;
+            NormalizedRenderTarget::Image(image_target) => {
+                let image = images.get(&image_target.image)?;
                 Some(RenderTargetInfo {
                     physical_size: image.size(),
-                    scale_factor: 1.0,
+                    scale_factor: image_target.scale_factor.0,
                 })
             }
             NormalizedRenderTarget::TextureView(id) => {
@@ -670,8 +682,8 @@ impl NormalizedRenderTarget {
             NormalizedRenderTarget::Window(window_ref) => {
                 changed_window_ids.contains(&window_ref.entity())
             }
-            NormalizedRenderTarget::Image(image_handle) => {
-                changed_image_handles.contains(&image_handle.id())
+            NormalizedRenderTarget::Image(image_target) => {
+                changed_image_handles.contains(&image_target.image.id())
             }
             NormalizedRenderTarget::TextureView(_) => true,
         }
